@@ -955,7 +955,6 @@ elif mod == "🔒 Panou Admin":
             st.markdown("##### ➕ Produs Nou/Actualizare pret")
             with st.form("form_produs_nou"):
                 c1, c2, c3 = st.columns([1, 2, 1])
-                cod_s = c1.text_input("Cod SAGA (ID)")
                 p_n = c2.text_input("Nume Produs")
                 t_n = c3.selectbox("TVA", ["11%", "21%"])
                 
