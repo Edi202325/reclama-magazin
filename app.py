@@ -1043,10 +1043,6 @@ elif mod == "🔒 Panou Admin":
         with t2:
             st.markdown('<div id="top-admin-comenzi" style="position:relative; top:-50px;"></div>', unsafe_allow_html=True)
             
-            st.subheader("🗂️ Gestionare Comenzi & Export SAGA")
-            
-            st.markdown("#### 🚀 Exportă pentru Contabilitate")
-            st.info("Generează un fișier XML compatibil SAGA pentru toate comenzile afișate mai jos.")
             
             cautare_admin = st.text_input("🔍 Caută / Filtrează comanda (Magazin, Număr, Data, Produse)...", key="search_admin")
             
@@ -1064,17 +1060,6 @@ elif mod == "🔒 Panou Admin":
                     df_afisare['Magazin'].astype(str).str.contains(term_a, case=False)
                 ]
 
-            try:
-                xml_saga_data = genereaza_xml_saga(df_afisare, df_produse)
-                st.download_button(
-                    label="📥 Descarcă XML pentru SAGA", 
-                    data=xml_saga_data, 
-                    file_name="Facturi.xml", 
-                    mime="application/xml",
-                    type="primary"
-                )
-            except Exception as e:
-                st.error(f"Eroare la generarea fișierului XML: {e}")
             
             st.divider()
             
