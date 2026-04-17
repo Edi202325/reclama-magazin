@@ -3,7 +3,6 @@ import pandas as pd
 import os
 import re
 from datetime import datetime, timedelta
-import xml.etree.ElementTree as ET
 from fpdf import FPDF
 import gspread
 from google.oauth2.service_account import Credentials
@@ -116,17 +115,18 @@ TAB_ARHIVA_PRODUSE = 'Arhiva_Produse'
 TAB_ARHIVA_COMENZI = 'Arhiva_Comenzi'
 TAB_DRAFT = 'Cos_Salvat' 
 
-COLOANE_PRODUSE = ['Cod SAGA', 'Nume Produs', 'TVA', 'UM', 'Pret Unitar', 'Pret Vanzare', 'In Stoc']
+# Am eliminat complet 'Cod SAGA' din coloane
+COLOANE_PRODUSE = ['Nume Produs', 'TVA', 'UM', 'Pret Unitar', 'Pret Vanzare', 'In Stoc']
 
 PAROLA_ADMIN = "admin123" 
 PAROLA_BIROU = "birou123"
 
 CREDENTIALE_MAGAZINE = {
-    "Magazin Centru": "centru1", 
-    "Magazin Nord": "nord1", 
-    "Magazin Sud": "sud1", 
-    "Magazin Est": "est1",
-    "Magazin Vest": "vest1"
+    "Magazin 1": "mag1", 
+    "Magazin 2": "mag2", 
+    "Magazin 3": "mag3", 
+    "Magazin 4": "mag4",
+    "Magazin 5": "mag5"
 }
 
 CIF_MAGAZINE = {
@@ -190,9 +190,6 @@ def get_data(tab_name, columns):
         headers = data_bruta[0]
         rows = data_bruta[1:]
         df = pd.DataFrame(rows, columns=headers)
-        
-        if 'Cod SAGA' in df.columns:
-            df['Cod SAGA'] = df['Cod SAGA'].astype(str).str.replace(r'\.0$', '', regex=True)
 
         for col in columns:
             if col not in df.columns:
@@ -230,9 +227,6 @@ def save_data(df, tab_name):
             worksheet = sheet.add_worksheet(title=tab_name, rows=1000, cols=20)
             
         df_clean = df.copy()
-        
-        if 'Cod SAGA' in df_clean.columns:
-            df_clean['Cod SAGA'] = df_clean['Cod SAGA'].astype(str).str.replace(r'\.0$', '', regex=True)
 
         if 'Pret Unitar' in df_clean.columns:
             df_clean['Pret Unitar'] = pd.to_numeric(df_clean['Pret Unitar'], errors='coerce').fillna(0.0).map(lambda x: f"{x:.2f}")
@@ -276,9 +270,6 @@ def append_data(df_nou, tab_name):
                 worksheet.update(values=[df_nou.columns.tolist()], range_name="A1", value_input_option='RAW')
             
         df_clean = df_nou.copy()
-        
-        if 'Cod SAGA' in df_clean.columns:
-            df_clean['Cod SAGA'] = df_clean['Cod SAGA'].astype(str).str.replace(r'\.0$', '', regex=True)
 
         if 'Pret Unitar' in df_clean.columns:
             df_clean['Pret Unitar'] = pd.to_numeric(df_clean['Pret Unitar'], errors='coerce').fillna(0.0).map(lambda x: f"{x:.2f}")
@@ -309,11 +300,8 @@ def curata_preturi_import(df):
         elif c_low in ['nume produs', 'produs', 'denumire']: col_map[col] = 'Nume Produs'
         elif c_low in ['tva', 'categorie', 'taxa']: col_map[col] = 'TVA'
         elif c_low in ['um', 'unitate']: col_map[col] = 'UM'
-        elif c_low in ['cod', 'cod saga', 'cod articol', 'id']: col_map[col] = 'Cod SAGA'
     
     df = df.rename(columns=col_map)
-    if 'Cod SAGA' in df.columns:
-        df['Cod SAGA'] = df['Cod SAGA'].astype(str).str.replace(r'\.0$', '', regex=True)
 
     cols = ['Pret Unitar', 'Pret Vanzare']
     for col in cols:
@@ -932,7 +920,7 @@ elif mod == "🔒 Panou Admin":
         
         with t1:
             with st.expander("📤 Import listă (Excel/salvat .csv)"):
-                st.info("💡 **Format Coloane Excel: Cod SAGA, Nume Produs, TVA, UM, Pret Unitar, Pret Vanzare.**")
+                st.info("💡 **Format Coloane Excel: Nume Produs, TVA, UM, Pret Unitar, Pret Vanzare.**")
                 up = st.file_uploader("", type=['csv', 'xlsx', 'xls']) 
                 
                 if up is not None:
@@ -954,7 +942,7 @@ elif mod == "🔒 Panou Admin":
             
             st.markdown("##### ➕ Produs Nou/Actualizare pret")
             with st.form("form_produs_nou"):
-                c1, c2 = st.columns([1, 2, 1])
+                c1, c2 = st.columns([3, 1])
                 p_n = c1.text_input("Nume Produs")
                 t_n = c2.selectbox("TVA", ["11%", "21%"])
                 
@@ -966,7 +954,7 @@ elif mod == "🔒 Panou Admin":
                 if st.form_submit_button("Salvează Produs"):
                     if p_n.strip() != "":
                         df_produse = df_produse[df_produse['Nume Produs'] != p_n]
-                        df_nou = pd.DataFrame({'Cod SAGA': [cod_s], 'TVA':[t_n], 'Nume Produs':[p_n], 'UM':[um_n], 'Pret Unitar':[p_u],'Pret Vanzare':[p_v], 'In Stoc': ['DA']})
+                        df_nou = pd.DataFrame({'Nume Produs':[p_n], 'TVA':[t_n], 'UM':[um_n], 'Pret Unitar':[p_u], 'Pret Vanzare':[p_v], 'In Stoc': ['DA']})
                         df_produse = pd.concat([df_produse, df_nou])
                         df_produse = df_produse[[c for c in COLOANE_PRODUSE if c in df_produse.columns]]
                         if save_data(df_produse, TAB_PRODUSE): st.rerun()
@@ -978,9 +966,6 @@ elif mod == "🔒 Panou Admin":
             df_disp_prod = df_produse.copy()
             if cautare_admin_produse:
                 df_disp_prod = df_disp_prod[df_disp_prod['Nume Produs'].str.contains(cautare_admin_produse, case=False, na=False)]
-            
-            if 'Cod SAGA' in df_disp_prod.columns:
-                df_disp_prod['Cod SAGA'] = df_disp_prod['Cod SAGA'].astype(str).str.replace(r'\.0$', '', regex=True)
 
             df_disp_prod['Pret Unitar'] = pd.to_numeric(df_disp_prod['Pret Unitar'], errors='coerce').fillna(0.0).map(lambda x: f"{x:.2f}")
             df_disp_prod['Pret Vanzare'] = pd.to_numeric(df_disp_prod['Pret Vanzare'], errors='coerce').fillna(0.0).map(lambda x: f"{x:.2f}")
@@ -1042,6 +1027,7 @@ elif mod == "🔒 Panou Admin":
         with t2:
             st.markdown('<div id="top-admin-comenzi" style="position:relative; top:-50px;"></div>', unsafe_allow_html=True)
             
+            st.subheader("🗂️ Gestionare Comenzi")
             
             cautare_admin = st.text_input("🔍 Caută / Filtrează comanda (Magazin, Număr, Data, Produse)...", key="search_admin")
             
@@ -1058,7 +1044,6 @@ elif mod == "🔒 Panou Admin":
                     df_afisare['Detalii Comanda'].astype(str).str.contains(term_a, case=False) |
                     df_afisare['Magazin'].astype(str).str.contains(term_a, case=False)
                 ]
-
             
             st.divider()
             
@@ -1121,7 +1106,6 @@ elif mod == "🔒 Panou Admin":
             st.divider()
             st.subheader("🗑️ Ștergere Comenzi")
             
-            # AM ADĂUGAT DEFINIREA VARIABILEI AICI
             lista_edit_c = []
             if 'df_afisare' in locals() and not df_afisare.empty:
                 for _, r in df_afisare.iterrows():
