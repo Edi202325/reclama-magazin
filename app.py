@@ -954,14 +954,14 @@ elif mod == "🔒 Panou Admin":
             
             st.markdown("##### ➕ Produs Nou/Actualizare pret")
             with st.form("form_produs_nou"):
-                c1, c2, c3 = st.columns([1, 2, 1])
-                p_n = c2.text_input("Nume Produs")
-                t_n = c3.selectbox("TVA", ["11%", "21%"])
+                c1, c2 = st.columns([1, 2, 1])
+                p_n = c1.text_input("Nume Produs")
+                t_n = c2.selectbox("TVA", ["11%", "21%"])
                 
-                c4, c5, c6 = st.columns(3)
-                um_n = c4.selectbox("UM (Unitate Măsură)", ["", "BUC", "PET", "KG", "BAX"])
-                p_u = c5.number_input("Achiziție", 0.00, step=0.01, format="%.2f")
-                p_v = c6.number_input("Vânzare", 0.00, step=0.01, format="%.2f")
+                c3, c4, c5 = st.columns(3)
+                um_n = c3.selectbox("UM (Unitate Măsură)", ["", "BUC", "PET", "KG", "BAX"])
+                p_u = c4.number_input("Achiziție", 0.00, step=0.01, format="%.2f")
+                p_v = c5.number_input("Vânzare", 0.00, step=0.01, format="%.2f")
                 
                 if st.form_submit_button("Salvează Produs"):
                     if p_n.strip() != "":
