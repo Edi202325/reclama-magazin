@@ -1,2 +1,6 @@
 streamlit
 pandas
+fpdf
+gspread
+google-auth
+openpyxl
