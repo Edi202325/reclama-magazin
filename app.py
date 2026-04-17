@@ -10,7 +10,7 @@ from google.oauth2.service_account import Credentials
 import time
 
 # --- 1. CONFIGURARE PAGINĂ ---
-st.set_page_config(page_title="Aplicatie Comenzi BIARAL", layout="wide", page_icon="🛒")
+st.set_page_config(page_title="Platformă Comenzi", layout="wide", page_icon="🛒")
 
 # --- CSS COMPLET ---
 st.markdown("""
@@ -108,7 +108,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- CONSTANTE & CREDENȚIALE ---
-NUME_GOOGLE_SHEET = 'BIARAL_DB'
+NUME_GOOGLE_SHEET = 'Platforma_Comenzi_Demo_DB'
 
 TAB_PRODUSE = 'Produse'
 TAB_COMENZI = 'Comenzi'
@@ -118,34 +118,41 @@ TAB_DRAFT = 'Cos_Salvat'
 
 COLOANE_PRODUSE = ['Cod SAGA', 'Nume Produs', 'TVA', 'UM', 'Pret Unitar', 'Pret Vanzare', 'In Stoc']
 
-PAROLA_ADMIN = "@elena2105" 
-PAROLA_BIROU = "Dorianabirou"
+PAROLA_ADMIN = "admin123" 
+PAROLA_BIROU = "birou123"
 
-# Configurăm clienții în loc de magazine
-CREDENTIALE_CLIENTI = {
-    f"Client {i}": f"c{i}" for i in range(1, 11)
+CREDENTIALE_MAGAZINE = {
+    "Magazin Centru": "centru1", 
+    "Magazin Nord": "nord1", 
+    "Magazin Sud": "sud1", 
+    "Magazin Est": "est1",
+    "Magazin Vest": "vest1"
 }
 
-CIF_CLIENTI = {
-    f"Client {i}": f"RO0000{i:02d}" for i in range(1, 11)
+CIF_MAGAZINE = {
+    "Magazin Centru": "RO000001", 
+    "Magazin Nord": "RO000002",  
+    "Magazin Sud": "RO000003", 
+    "Magazin Est": "RO000004",
+    "Magazin Vest": "RO000005"
 }
 
-# Poți actualiza datele firmei BIARAL mai jos
-FIRMA_NUME = "BIARAL SRL"
-FIRMA_CIF = "RO00000000"
-FIRMA_RC = "J00/000/0000"
-FIRMA_ADRESA = "Adresa firmei BIARAL"
+FIRMA_NUME = "COMPANIA DEMO SRL"
+FIRMA_CIF = "RO12345678"
+FIRMA_RC = "J00/000/2024"
+FIRMA_ADRESA = "Oras, str. Exemplu nr. 10"
 FIRMA_CAPITAL = "200 RON"
-FIRMA_CONTACT = "Tel.0000000000  Email: contact@biaral.ro"
-FIRMA_BANCA = "BANCA"
-FIRMA_IBAN = "RO00BANK0000000000000000"
+FIRMA_CONTACT = "Tel.0700000000  Email: contact@companiademo.ro"
+FIRMA_BANCA = "BANCA DEMO SA"
+FIRMA_IBAN = "RO00DEMO1234567890123456"
 
 # --- STATE ---
 if 'sort_state' not in st.session_state: st.session_state.sort_state = {'col': None, 'dir': None}
 if 'user_logat' not in st.session_state: st.session_state.user_logat = None 
 if 'cos_cumparaturi' not in st.session_state: st.session_state.cos_cumparaturi = {} 
+# Variabile noi pentru editare și resetare interfață
 if 'edit_order_id' not in st.session_state: st.session_state.edit_order_id = None
-if 'edit_order_client' not in st.session_state: st.session_state.edit_order_client = None
+if 'edit_order_store' not in st.session_state: st.session_state.edit_order_store = None
 if 'edit_order_date' not in st.session_state: st.session_state.edit_order_date = None
 if 'cart_reset_counter' not in st.session_state: st.session_state.cart_reset_counter = 0
 
@@ -352,15 +359,37 @@ def migrare_automata_tva(df):
     df = df[[c for c in COLOANE_PRODUSE if c in df.columns]]
     return df, modificat
 
+# 💡 LOGICA REPARATĂ: Sortarea sigură a priorităților
+def get_sort_priority(nume_produs):
+    nume_low = str(nume_produs).lower().replace(" ", "")
+    if 'sifon' in nume_low:
+        return 1
+    elif 'beresuceava' in nume_low:
+        return 2
+    elif 'sgr' in nume_low:
+        return 3
+    # Regex strict: "5l" nu trebuie sa aiba niciun numar, punct sau virgula in fata lui!
+    elif re.search(r'(?<![,\.0-9])5l', nume_low):
+        return 4
+    else:
+        return 5
+
 def parseaza_text_in_tabel(text_comanda, df_inv=None):
     try:
         text = str(text_comanda).replace("{", "").replace("}", "").replace("'", "").replace('"', "")
         items = text.split(", ")
         rezultat = [{"Produs": item.split(":")[0].strip(), "Cantitate": item.split(":")[1].strip()} for item in items if ":" in item]
         
-        # Sortare strict alfabetica dupa nume produs
         def sort_key_istoric(x):
-            return x['Produs'].lower()
+            tva_val = 999
+            if df_inv is not None and not df_inv.empty:
+                m = df_inv[df_inv['Nume Produs'].str.strip().str.lower() == x['Produs'].lower()]
+                if not m.empty:
+                    try: tva_val = float(str(m.iloc[0]['TVA']).replace('%', '').replace(',', '.'))
+                    except: pass
+            
+            nume = x['Produs']
+            return (get_sort_priority(nume), tva_val, nume.lower())
             
         rezultat.sort(key=sort_key_istoric)
         return rezultat
@@ -389,12 +418,12 @@ def genereaza_xml_saga(df_comenzi_export, df_produse_baza):
         factura = ET.SubElement(root, "Factura")
         antet = ET.SubElement(factura, "Antet")
         
-        client_nume = str(r['Client'])
-        cif_client = CIF_CLIENTI.get(client_nume, "") 
+        magazin = str(r['Magazin'])
+        cif_client = CIF_MAGAZINE.get(magazin, "") 
         
         ET.SubElement(antet, "FurnizorNume").text = FIRMA_NUME
         ET.SubElement(antet, "FurnizorCIF").text = FIRMA_CIF 
-        ET.SubElement(antet, "ClientNume").text = client_nume
+        ET.SubElement(antet, "ClientNume").text = magazin
         ET.SubElement(antet, "ClientCIF").text = cif_client 
         
         try:
@@ -478,7 +507,17 @@ def genereaza_xml_saga(df_comenzi_export, df_produse_baza):
     return xml_str.encode('windows-1250')
 
 # --- PDF GENERATOR ---
-def genereaza_pdf_aviz(data_comenzii, nume_client, produse_lista, id_comanda, df_inv):
+def get_pdf_volume_priority(nume_produs):
+    nume_low = str(nume_produs).lower().replace(" ", "")
+    if '2,5l' in nume_low or '2.5l' in nume_low: return 1
+    # Regex strict pt volume ca "2l" sa nu dea match pe "1.2l"
+    if re.search(r'(?<![,\.0-9])2l', nume_low): return 2
+    if '1,5l' in nume_low or '1.5l' in nume_low: return 3
+    if re.search(r'(?<![,\.0-9])1l', nume_low): return 4
+    if '0,5l' in nume_low or '0.5l' in nume_low: return 5
+    return 99
+
+def genereaza_pdf_aviz(data_comenzii, magazin, produse_lista, id_comanda, df_inv):
     pdf = FPDF(); pdf.add_page(); pdf.set_font('Arial', '', 9)
     
     data_str = str(data_comenzii)
@@ -498,7 +537,7 @@ def genereaza_pdf_aviz(data_comenzii, nume_client, produse_lista, id_comanda, df
     y_info = pdf.get_y()
     pdf.set_font('Arial', 'B', 9); pdf.cell(90, 5, safe_text(FIRMA_NUME), 0, 1)
     pdf.set_font('Arial', '', 8)
-    pdf.set_x(110); pdf.set_font('Arial', 'B', 12); pdf.cell(90, 4, safe_text(str(nume_client)), 0, 1)
+    pdf.set_x(110); pdf.set_font('Arial', 'B', 12); pdf.cell(90, 4, safe_text(str(magazin)), 0, 1)
 
     pdf.ln(10)
     
@@ -546,9 +585,18 @@ def genereaza_pdf_aviz(data_comenzii, nume_client, produse_lista, id_comanda, df
         else:
             produse_21.append(prod_info)
             
-    # Sortare pur alfabetica
+    # Ordinea DOAR pentru PDF, exact cum ai cerut
     def sort_key_prioritati(x):
-        return x['nume_original'].lower()
+        nume = x['nume_original']
+        prio_main = get_sort_priority(nume)
+        
+        # Volumul contează doar dacă este SGR (prio_main == 3)
+        if prio_main == 3:
+            prio_vol = get_pdf_volume_priority(nume)
+        else:
+            prio_vol = 99
+            
+        return (prio_main, prio_vol, nume.lower())
         
     produse_11.sort(key=sort_key_prioritati)
     produse_21.sort(key=sort_key_prioritati)
@@ -588,13 +636,13 @@ def genereaza_pdf_aviz(data_comenzii, nume_client, produse_lista, id_comanda, df
 
 # --- LOGICĂ APP ---
 df_produse = get_data(TAB_PRODUSE, COLOANE_PRODUSE)
-df_comenzi = get_data(TAB_COMENZI, ['Data', 'Client', 'Detalii Comanda', 'Nr Comanda'])
+df_comenzi = get_data(TAB_COMENZI, ['Data', 'Magazin', 'Detalii Comanda', 'Nr Comanda'])
 
 df_produse, a_mod = migrare_automata_tva(df_produse)
 if a_mod:
     if save_data(df_produse, TAB_PRODUSE): st.rerun()
 
-st.title("🛒 Aplicație Comenzi BIARAL")
+st.title("🛒 Platformă Gestiune Comenzi")
 st.markdown("---")
 
 with st.sidebar:
@@ -602,16 +650,16 @@ with st.sidebar:
 
 if mod == "📝 Plasează Comandă":
     if st.session_state.user_logat is None:
-        st.subheader("🔐 Acces Client")
-        nume_s = st.selectbox("Alege Clientul:", list(CREDENTIALE_CLIENTI.keys()))
+        st.subheader("🔐 Acces Magazin")
+        nume_s = st.selectbox("Alege Magazinul:", list(CREDENTIALE_MAGAZINE.keys()))
         pass_i = st.text_input("Parola:", type="password")
         if st.button("Accesare"):
-            if pass_i == CREDENTIALE_CLIENTI[nume_s]: 
+            if pass_i == CREDENTIALE_MAGAZINE[nume_s]: 
                 st.session_state.user_logat = nume_s
                 
-                df_draft = get_data(TAB_DRAFT, ['Client', 'Produs', 'Cantitate'])
+                df_draft = get_data(TAB_DRAFT, ['Magazin', 'Produs', 'Cantitate'])
                 if not df_draft.empty:
-                    draft_mag = df_draft[df_draft['Client'] == nume_s]
+                    draft_mag = df_draft[df_draft['Magazin'] == nume_s]
                     for _, rand in draft_mag.iterrows():
                         p = rand['Produs']
                         try:
@@ -638,15 +686,20 @@ if mod == "📝 Plasează Comandă":
                 st.markdown("### 🛒 Coșul Tău")
                 
                 if st.session_state.edit_order_id is not None:
-                    st.warning(f"⚠️ **MODIFICI COMANDA DIN {st.session_state.edit_order_date}** pentru {st.session_state.edit_order_client}. Adaugă cantități pozitive pentru a suplimenta sau negative (cu minus) pentru a scădea/șterge din comanda existentă.")
+                    st.warning(f"⚠️ **MODIFICI COMANDA DIN {st.session_state.edit_order_date}** pentru {st.session_state.edit_order_store}. Adaugă cantități pozitive pentru a suplimenta sau negative (cu minus) pentru a scădea/șterge din comanda existentă.")
                     
                 with st.container(border=True):
                     if not st.session_state.cos_cumparaturi:
                         st.info("Coșul este gol momentan. Caută produse și adaugă cantitatea dorită!")
                     else:
-                        # Sortare pur alfabetica pt cos
                         def sort_key_cos(x):
-                            return x[0].lower()
+                            p_nume = x[0]
+                            tva = 999
+                            m = df_produse[df_produse['Nume Produs'].str.strip().str.lower() == p_nume.lower()]
+                            if not m.empty:
+                                try: tva = float(str(m.iloc[0]['TVA']).replace('%', '').replace(',', '.'))
+                                except: pass
+                            return (get_sort_priority(p_nume), tva, p_nume)
 
                         cos_sortat = sorted(st.session_state.cos_cumparaturi.items(), key=sort_key_cos)
                         for p, c in cos_sortat:
@@ -658,7 +711,7 @@ if mod == "📝 Plasează Comandă":
                         
                         if c_btn_cancel.button("❌ Anulează Modificarea", use_container_width=True):
                             st.session_state.edit_order_id = None
-                            st.session_state.edit_order_client = None
+                            st.session_state.edit_order_store = None
                             st.session_state.edit_order_date = None
                             st.session_state.cos_cumparaturi.clear()
                             st.session_state.cart_reset_counter += 1
@@ -699,7 +752,7 @@ if mod == "📝 Plasează Comandă":
 
                                 if save_data(df_comenzi, TAB_COMENZI):
                                     st.session_state.edit_order_id = None
-                                    st.session_state.edit_order_client = None
+                                    st.session_state.edit_order_store = None
                                     st.session_state.edit_order_date = None
                                     st.session_state.cos_cumparaturi.clear()
                                     st.session_state.cart_reset_counter += 1
@@ -714,20 +767,20 @@ if mod == "📝 Plasează Comandă":
                         
                         if c_btn1.button("💾 Salvează Coș (Pauză)", use_container_width=True):
                             try:
-                                df_draft = get_data(TAB_DRAFT, ['Client', 'Produs', 'Cantitate'])
+                                df_draft = get_data(TAB_DRAFT, ['Magazin', 'Produs', 'Cantitate'])
                                 
-                                if 'Client' not in df_draft.columns:
-                                    df_draft['Client'] = ""
+                                if 'Magazin' not in df_draft.columns:
+                                    df_draft['Magazin'] = ""
                                 if 'Produs' not in df_draft.columns:
                                     df_draft['Produs'] = ""
                                 if 'Cantitate' not in df_draft.columns:
                                     df_draft['Cantitate'] = ""
                                 
                                 if not df_draft.empty:
-                                    df_draft = df_draft[df_draft['Client'].astype(str) != str(st.session_state.user_logat)]
+                                    df_draft = df_draft[df_draft['Magazin'].astype(str) != str(st.session_state.user_logat)]
                                 
                                 if st.session_state.cos_cumparaturi:
-                                    d_list = [{'Client': str(st.session_state.user_logat), 'Produs': str(p), 'Cantitate': str(c)} for p, c in st.session_state.cos_cumparaturi.items()]
+                                    d_list = [{'Magazin': str(st.session_state.user_logat), 'Produs': str(p), 'Cantitate': str(c)} for p, c in st.session_state.cos_cumparaturi.items()]
                                     df_nou_draft = pd.DataFrame(d_list)
                                     
                                     if df_draft.empty:
@@ -736,7 +789,7 @@ if mod == "📝 Plasează Comandă":
                                         df_draft = pd.concat([df_draft, df_nou_draft], ignore_index=True)
                                 
                                 if save_data(df_draft, TAB_DRAFT):
-                                    st.success("✅ Coșul a fost salvat (sau golit) cu succes! Poți ieși din aplicație.")
+                                    st.success("✅ Coșul a fost salvat cu succes! Poți ieși din aplicație.")
                                     
                             except Exception as e:
                                 st.error(f"⚠️ Eroare la salvarea coșului: {str(e)}")
@@ -752,7 +805,7 @@ if mod == "📝 Plasează Comandă":
                                 
                                 nou = pd.DataFrame({
                                     'Data': [ora_corecta.strftime("%d.%m.%Y %H:%M")], 
-                                    'Client': [st.session_state.user_logat], 
+                                    'Magazin': [st.session_state.user_logat], 
                                     'Detalii Comanda': [", ".join(articole)], 
                                     'Nr Comanda': [nr_nou]
                                 })
@@ -760,9 +813,9 @@ if mod == "📝 Plasează Comandă":
                                 
                                 if save_data(df_comenzi_actualizat, TAB_COMENZI):
                                     try:
-                                        df_draft = get_data(TAB_DRAFT, ['Client', 'Produs', 'Cantitate'])
-                                        if not df_draft.empty and 'Client' in df_draft.columns:
-                                            df_draft = df_draft[df_draft['Client'].astype(str) != str(st.session_state.user_logat)]
+                                        df_draft = get_data(TAB_DRAFT, ['Magazin', 'Produs', 'Cantitate'])
+                                        if not df_draft.empty and 'Magazin' in df_draft.columns:
+                                            df_draft = df_draft[df_draft['Magazin'].astype(str) != str(st.session_state.user_logat)]
                                             save_data(df_draft, TAB_DRAFT)
                                     except Exception: 
                                         pass
@@ -781,6 +834,7 @@ if mod == "📝 Plasează Comandă":
                 df_disponibile = df_produse[df_produse['In Stoc'].astype(str).str.upper() != 'NU']
                 df_a = df_disponibile[df_disponibile['Nume Produs'].str.contains(cautare, case=False)] if cautare else df_disponibile.copy()
                 
+                df_a['priority'] = df_a['Nume Produs'].apply(get_sort_priority)
                 df_a['TVA_num'] = df_a['TVA'].astype(str).str.replace('%', '').apply(pd.to_numeric, errors='coerce').fillna(999)
                 
                 st_col, st_dir = st.session_state.sort_state['col'], st.session_state.sort_state['dir']
@@ -790,16 +844,15 @@ if mod == "📝 Plasează Comandă":
                 if cs2.button(f"% TVA"): cycle_sort('TVA'); st.rerun()
                 cs3.markdown("<div style='text-align:center;font-weight:bold;padding-top:15px;'>Cant.</div>", unsafe_allow_html=True)
                 
-                # Sortare pur alfabetica
                 if st_col and st_dir:
                     if st_col == 'Nume Produs': 
-                        df_a = df_a.sort_values(by=['Nume Produs'], ascending=[(st_dir=='asc')])
+                        df_a = df_a.sort_values(by=['priority', 'Nume Produs'], ascending=[True, (st_dir=='asc')])
                     else:
-                        df_a = df_a.sort_values(by=['TVA_num', 'Nume Produs'], ascending=[(st_dir=='asc'), True])
+                        df_a = df_a.sort_values(by=['priority', 'TVA_num', 'Nume Produs'], ascending=[True, (st_dir=='asc'), True])
                 else:
-                    df_a = df_a.sort_values(by=['Nume Produs'], ascending=[True])
+                    df_a = df_a.sort_values(by=['priority', 'TVA_num', 'Nume Produs'], ascending=[True, True, True])
 
-                df_a = df_a.drop(columns=['TVA_num'])
+                df_a = df_a.drop(columns=['TVA_num', 'priority'])
 
                 for _, r in df_a.iterrows():
                     r1, r2, r3 = st.columns([3, 1, 1.5])
@@ -824,7 +877,7 @@ if mod == "📝 Plasează Comandă":
 
         with tab_istoric:
             cautare_istoric = st.text_input("🔍 Caută în istoric (Număr, Data, Produse)...", key="search_user")
-            ist = df_comenzi[(df_comenzi['Client'] == st.session_state.user_logat) & (df_comenzi['Client'] != 'SYSTEM')].iloc[::-1]
+            ist = df_comenzi[(df_comenzi['Magazin'] == st.session_state.user_logat) & (df_comenzi['Magazin'] != 'SYSTEM')].iloc[::-1]
             
             if cautare_istoric:
                 term = cautare_istoric.lower()
@@ -852,13 +905,13 @@ if mod == "📝 Plasează Comandă":
                     
                     try:
                         data_f_nume = str(r['Data']).split(' ')[0].replace('/', '.')
-                        nume_scurt = CREDENTIALE_CLIENTI.get(str(r['Client']), str(r['Client'])).upper()
+                        nume_scurt = CREDENTIALE_MAGAZINE.get(str(r['Magazin']), str(r['Magazin'])).upper()
                         
                         pdf_key = f"pdf_data_user_{uid}"
                         if pdf_key not in st.session_state:
                             if st.button(f"📄 Generează PDF #{nr_c}", key=f"btn_gen_user_{uid}"):
                                 with st.spinner("Generez PDF-ul..."):
-                                    st.session_state[pdf_key] = genereaza_pdf_aviz(r['Data'], r['Client'], lista_p_user, nr_c, df_produse)
+                                    st.session_state[pdf_key] = genereaza_pdf_aviz(r['Data'], r['Magazin'], lista_p_user, nr_c, df_produse)
                                 st.rerun()
                         else:
                             st.download_button(
@@ -878,11 +931,11 @@ if mod == "📝 Plasează Comandă":
                         if c_btn.button("🛒 Editează Comanda", key=f"btn_mod_user_{uid}"):
                             if parola == PAROLA_ADMIN:
                                 st.session_state.edit_order_id = nr_c
-                                st.session_state.edit_order_client = r['Client']
+                                st.session_state.edit_order_store = r['Magazin']
                                 st.session_state.edit_order_date = str(r['Data']).split(' ')[0]
                                 st.session_state.cos_cumparaturi.clear()
                                 st.session_state.cart_reset_counter += 1
-                                st.success("✅ Mod de editare activat! Mergi la tab-ul '📝 Comandă Nouă' pentru a adăuga/scădea produse.")
+                                st.success("✅ Mod de editare activat! Mergi la tab-ul '📝 Comandă Nouă' pentru modificarea comenzilor.")
                                 time.sleep(1.5)
                                 st.rerun()
                             else:
@@ -893,12 +946,12 @@ elif mod == "💼 Birou":
     if st.sidebar.text_input("Parola Birou", type="password") == PAROLA_BIROU:
         st.subheader("💼 Panou Birou")
         
-        cautare_birou = st.text_input("🔍 Caută / Filtrează comanda (Client, Număr, Data, Produse)...", key="search_birou")
+        cautare_birou = st.text_input("🔍 Caută / Filtrează comanda (Magazin, Număr, Data, Produse)...", key="search_birou")
         
         if not df_comenzi.empty:
-            df_afisare_birou = df_comenzi[df_comenzi['Client'] != 'SYSTEM'].iloc[::-1]
+            df_afisare_birou = df_comenzi[df_comenzi['Magazin'] != 'SYSTEM'].iloc[::-1]
         else:
-            df_afisare_birou = pd.DataFrame(columns=['Data', 'Client', 'Detalii Comanda', 'Nr Comanda'])
+            df_afisare_birou = pd.DataFrame(columns=['Data', 'Magazin', 'Detalii Comanda', 'Nr Comanda'])
 
         if cautare_birou and not df_afisare_birou.empty:
             term_b = cautare_birou.lower()
@@ -906,7 +959,7 @@ elif mod == "💼 Birou":
                 df_afisare_birou['Nr Comanda'].astype(str).str.contains(term_b, case=False) |
                 df_afisare_birou['Data'].astype(str).str.contains(term_b, case=False) |
                 df_afisare_birou['Detalii Comanda'].astype(str).str.contains(term_b, case=False) |
-                df_afisare_birou['Client'].astype(str).str.contains(term_b, case=False)
+                df_afisare_birou['Magazin'].astype(str).str.contains(term_b, case=False)
             ]
         
         st.divider()
@@ -923,7 +976,7 @@ elif mod == "💼 Birou":
                         
                     uid = f"{nr_c}_{idx}"
                         
-                    st.write(f"📦 #{nr_c} - {r['Client']} | {r['Data']}")
+                    st.write(f"📦 #{nr_c} - {r['Magazin']} | {r['Data']}")
                     lista_p = parseaza_text_in_tabel(r['Detalii Comanda'], df_produse)
                     df_birou_tab = pd.DataFrame(lista_p)
                     if not df_birou_tab.empty:
@@ -931,13 +984,13 @@ elif mod == "💼 Birou":
                         st.table(df_birou_tab)
                     try:
                         data_f_nume = str(r['Data']).split(' ')[0].replace('/', '.')
-                        nume_scurt = CREDENTIALE_CLIENTI.get(str(r['Client']), str(r['Client'])).upper()
+                        nume_scurt = CREDENTIALE_MAGAZINE.get(str(r['Magazin']), str(r['Magazin'])).upper()
                         
                         pdf_key = f"pdf_data_birou_{uid}"
                         if pdf_key not in st.session_state:
                             if st.button(f"📄 Generează PDF #{nr_c}", key=f"btn_gen_birou_{uid}"):
                                 with st.spinner("Generez PDF-ul..."):
-                                    st.session_state[pdf_key] = genereaza_pdf_aviz(r['Data'], r['Client'], lista_p, nr_c, df_produse)
+                                    st.session_state[pdf_key] = genereaza_pdf_aviz(r['Data'], r['Magazin'], lista_p, nr_c, df_produse)
                                 st.rerun()
                         else:
                             st.download_button(
@@ -954,12 +1007,12 @@ elif mod == "💼 Birou":
                     with st.expander("➕ Modificare Comandă (Adaugă/Scade Produse)"):
                         c_pass, c_btn = st.columns(2)
                         parola = c_pass.text_input("Parola Admin:", type="password", key=f"pass_mod_birou_{uid}")
-                        if c_btn.button("🛒 Mergi la client pentru editare", key=f"btn_mod_birou_{uid}"):
+                        if c_btn.button("🛒 Mergi la magazin pentru editare", key=f"btn_mod_birou_{uid}"):
                             if parola == PAROLA_ADMIN:
                                 st.session_state.edit_order_id = nr_c
-                                st.session_state.edit_order_client = r['Client']
+                                st.session_state.edit_order_store = r['Magazin']
                                 st.session_state.edit_order_date = str(r['Data']).split(' ')[0]
-                                st.session_state.user_logat = r['Client']
+                                st.session_state.user_logat = r['Magazin']
                                 st.session_state.cos_cumparaturi.clear()
                                 st.session_state.cart_reset_counter += 1
                                 st.success("✅ Mod de editare activat! Navighează manual la secțiunea '📝 Plasează Comandă' din meniul stânga.")
@@ -1044,7 +1097,7 @@ elif mod == "🔒 Panou Admin":
 
             st.divider()
             st.subheader("🚨 Resetare Bază de Date Produse")
-            confirm_del_all = st.checkbox("Sunt sigur că vreau să șterg TOATE produsele din sistem!")
+            confirm_del_all = st.checkbox("Sunt sigur că vreau să șterg TOATE produsele din magazin!")
             if st.button("🧨 ȘTERGE TOT") and confirm_del_all:
                 if not df_produse.empty: append_data(df_produse, TAB_ARHIVA_PRODUSE) 
                 df_gol = pd.DataFrame(columns=COLOANE_PRODUSE)
@@ -1052,7 +1105,7 @@ elif mod == "🔒 Panou Admin":
 
         with t_stoc:
             st.subheader("📊 Gestionare Stoc Produse")
-            st.info("Bifează produsele care NU SUNT ÎN STOC (Stoc 0). Acestea vor dispărea de pe panoul de comandă al clienților, fără a fi șterse din sistem.")
+            st.info("Bifează produsele care NU SUNT ÎN STOC (Stoc 0). Acestea vor dispărea de pe panoul de comandă al magazinelor, fără a fi șterse din sistem.")
 
             cautare_stoc = st.text_input("🔍 Caută produs pentru stoc...", key="search_stoc")
 
@@ -1091,12 +1144,12 @@ elif mod == "🔒 Panou Admin":
             st.markdown("#### 🚀 Exportă pentru Contabilitate")
             st.info("Generează un fișier XML compatibil SAGA pentru toate comenzile afișate mai jos.")
             
-            cautare_admin = st.text_input("🔍 Caută / Filtrează comanda (Client, Număr, Data, Produse)...", key="search_admin")
+            cautare_admin = st.text_input("🔍 Caută / Filtrează comanda (Magazin, Număr, Data, Produse)...", key="search_admin")
             
             if not df_comenzi.empty:
-                df_afisare = df_comenzi[df_comenzi['Client'] != 'SYSTEM'].iloc[::-1]
+                df_afisare = df_comenzi[df_comenzi['Magazin'] != 'SYSTEM'].iloc[::-1]
             else:
-                df_afisare = pd.DataFrame(columns=['Data', 'Client', 'Detalii Comanda', 'Nr Comanda'])
+                df_afisare = pd.DataFrame(columns=['Data', 'Magazin', 'Detalii Comanda', 'Nr Comanda'])
 
             if cautare_admin and not df_afisare.empty:
                 term_a = cautare_admin.lower()
@@ -1104,7 +1157,7 @@ elif mod == "🔒 Panou Admin":
                     df_afisare['Nr Comanda'].astype(str).str.contains(term_a, case=False) |
                     df_afisare['Data'].astype(str).str.contains(term_a, case=False) |
                     df_afisare['Detalii Comanda'].astype(str).str.contains(term_a, case=False) |
-                    df_afisare['Client'].astype(str).str.contains(term_a, case=False)
+                    df_afisare['Magazin'].astype(str).str.contains(term_a, case=False)
                 ]
 
             try:
@@ -1124,7 +1177,6 @@ elif mod == "🔒 Panou Admin":
             if df_afisare.empty:
                 st.success("Tabelul este curat. Nu există nicio comandă plasată momentan.")
             else:
-                lista_edit_c = []
                 for idx, r in df_afisare.iterrows():
                     with st.container(border=True):
                         try:
@@ -1133,9 +1185,8 @@ elif mod == "🔒 Panou Admin":
                             nr_c = 0
                             
                         uid = f"{nr_c}_{idx}"
-                        lista_edit_c.append(f"#{nr_c} - {r['Client']} ({r['Data']})")
                             
-                        st.write(f"📦 #{nr_c} - {r['Client']} | {r['Data']}")
+                        st.write(f"📦 #{nr_c} - {r['Magazin']} | {r['Data']}")
                         lista_p = parseaza_text_in_tabel(r['Detalii Comanda'], df_produse)
                         df_adm_tab = pd.DataFrame(lista_p)
                         if not df_adm_tab.empty:
@@ -1143,13 +1194,13 @@ elif mod == "🔒 Panou Admin":
                             st.table(df_adm_tab)
                         try:
                             data_f_nume = str(r['Data']).split(' ')[0].replace('/', '.')
-                            nume_scurt = CREDENTIALE_CLIENTI.get(str(r['Client']), str(r['Client'])).upper()
+                            nume_scurt = CREDENTIALE_MAGAZINE.get(str(r['Magazin']), str(r['Magazin'])).upper()
                             
                             pdf_key = f"pdf_data_admin_{uid}"
                             if pdf_key not in st.session_state:
                                 if st.button(f"📄 Generează PDF #{nr_c}", key=f"btn_gen_admin_{uid}"):
                                     with st.spinner("Generez PDF-ul..."):
-                                        st.session_state[pdf_key] = genereaza_pdf_aviz(r['Data'], r['Client'], lista_p, nr_c, df_produse)
+                                        st.session_state[pdf_key] = genereaza_pdf_aviz(r['Data'], r['Magazin'], lista_p, nr_c, df_produse)
                                     st.rerun()
                             else:
                                 st.download_button(
@@ -1166,12 +1217,12 @@ elif mod == "🔒 Panou Admin":
                         with st.expander("➕ Modificare Comandă (Adaugă/Scade Produse)"):
                             c_pass, c_btn = st.columns(2)
                             parola = c_pass.text_input("Parola Admin:", type="password", key=f"pass_mod_admin_{uid}")
-                            if c_btn.button("🛒 Mergi la client pentru editare", key=f"btn_mod_admin_{uid}"):
+                            if c_btn.button("🛒 Mergi la magazin pentru editare", key=f"btn_mod_admin_{uid}"):
                                 if parola == PAROLA_ADMIN:
                                     st.session_state.edit_order_id = nr_c
-                                    st.session_state.edit_order_client = r['Client']
+                                    st.session_state.edit_order_store = r['Magazin']
                                     st.session_state.edit_order_date = str(r['Data']).split(' ')[0]
-                                    st.session_state.user_logat = r['Client']
+                                    st.session_state.user_logat = r['Magazin']
                                     st.session_state.cos_cumparaturi.clear()
                                     st.session_state.cart_reset_counter += 1
                                     st.success("✅ Mod de editare activat! Navighează manual la secțiunea '📝 Plasează Comandă' din meniul stânga.")
@@ -1182,7 +1233,17 @@ elif mod == "🔒 Panou Admin":
             st.divider()
             st.subheader("🗑️ Ștergere Comenzi")
             
-            if 'lista_edit_c' in locals() and lista_edit_c:
+            # AM ADĂUGAT DEFINIREA VARIABILEI AICI
+            lista_edit_c = []
+            if 'df_afisare' in locals() and not df_afisare.empty:
+                for _, r in df_afisare.iterrows():
+                    try:
+                        nr_c = int(float(r['Nr Comanda']))
+                    except:
+                        nr_c = 0
+                    lista_edit_c.append(f"#{nr_c} - {r['Magazin']} | {r['Data']}")
+
+            if lista_edit_c:
                 c_del = st.selectbox("Selectează comanda pentru ștergere individuală:", lista_edit_c)
                 if st.button("🗑️ Șterge Comanda Selectată"):
                     nr_s = int(c_del.split(" ")[0].replace("#", ""))
@@ -1199,9 +1260,9 @@ elif mod == "🔒 Panou Admin":
             st.write("---")
             confirm = st.checkbox("Bifează pentru confirmarea ștergerii TUTUROR comenzilor")
             if st.button("🚨 RESET TOTAL COMENZI") and confirm:
-                if not df_comenzi[df_comenzi['Client'] != 'SYSTEM'].empty:
-                    append_data(df_comenzi[df_comenzi['Client'] != 'SYSTEM'], TAB_ARHIVA_COMENZI)
-                df_config = df_comenzi[df_comenzi['Client'] == 'SYSTEM']
+                if not df_comenzi[df_comenzi['Magazin'] != 'SYSTEM'].empty:
+                    append_data(df_comenzi[df_comenzi['Magazin'] != 'SYSTEM'], TAB_ARHIVA_COMENZI)
+                df_config = df_comenzi[df_comenzi['Magazin'] == 'SYSTEM']
                 if save_data(df_config, TAB_COMENZI): st.rerun()
 
             st.write("---")
@@ -1212,10 +1273,10 @@ elif mod == "🔒 Panou Admin":
             numar_start = c_nr1.number_input("Număr următoarea comandă:", min_value=1, value=1, step=1)
             
             if c_nr2.button("🔄 Setează Numărul", use_container_width=True):
-                df_comenzi_clean = df_comenzi[df_comenzi['Client'] != 'SYSTEM']
+                df_comenzi_clean = df_comenzi[df_comenzi['Magazin'] != 'SYSTEM']
                 nou_config = pd.DataFrame({
                     'Data': ['CONFIG'], 
-                    'Client': ['SYSTEM'], 
+                    'Magazin': ['SYSTEM'], 
                     'Detalii Comanda': ['Setare numar custom'], 
                     'Nr Comanda': [numar_start - 1]
                 })
@@ -1225,7 +1286,7 @@ elif mod == "🔒 Panou Admin":
                     time.sleep(2)
                     st.rerun()
                     
-            # Adaugă HTML-ul pentru meniul plutitor din partea stângă la sfârșitul tab-ului Comenzi
+            # MENIUL PLUTITOR DIN STANGA ADAUGAT AICI
             st.markdown('''
                 <div class="floating-menu-left">
                     <a href="#zona-stergere-comenzi" class="float-btn">🗑️ Ștergere</a>
