@@ -115,7 +115,6 @@ TAB_ARHIVA_PRODUSE = 'Arhiva_Produse'
 TAB_ARHIVA_COMENZI = 'Arhiva_Comenzi'
 TAB_DRAFT = 'Cos_Salvat' 
 
-# Am eliminat complet 'Cod SAGA' din coloane
 COLOANE_PRODUSE = ['Nume Produs', 'TVA', 'UM', 'Pret Unitar', 'Pret Vanzare', 'In Stoc']
 
 PAROLA_ADMIN = "admin123" 
@@ -150,7 +149,6 @@ FIRMA_IBAN = "RO00DEMO1234567890123456"
 if 'sort_state' not in st.session_state: st.session_state.sort_state = {'col': None, 'dir': None}
 if 'user_logat' not in st.session_state: st.session_state.user_logat = None 
 if 'cos_cumparaturi' not in st.session_state: st.session_state.cos_cumparaturi = {} 
-# Variabile noi pentru editare și resetare interfață
 if 'edit_order_id' not in st.session_state: st.session_state.edit_order_id = None
 if 'edit_order_store' not in st.session_state: st.session_state.edit_order_store = None
 if 'edit_order_date' not in st.session_state: st.session_state.edit_order_date = None
@@ -578,7 +576,7 @@ if mod == "📝 Plasează Comandă":
                 st.markdown("### 🛒 Coșul Tău")
                 
                 if st.session_state.edit_order_id is not None:
-                    st.warning(f"⚠️ **MODIFICI COMANDA DIN {st.session_state.edit_order_date}** pentru {st.session_state.edit_order_store}. Adaugă cantități pozitive pentru a suplimenta sau negative (cu minus) pentru a scădea/șterge din comanda existentă.")
+                    st.warning(f"⚠️ **MODIFICI COMANDA DIN {st.session_state.edit_order_date}** pentru {st.session_state.edit_order_store}. Adaugă(+) sau scoate(-) produse din comandă.")
                     
                 with st.container(border=True):
                     if not st.session_state.cos_cumparaturi:
@@ -610,7 +608,7 @@ if mod == "📝 Plasează Comandă":
                             st.rerun()
 
                         is_cart_empty = not bool(st.session_state.cos_cumparaturi)
-                        if c_btn_save.button("💾 Adaugă/Scade din Comandă", use_container_width=True, type="primary", disabled=is_cart_empty):
+                        if c_btn_save.button("💾 Modificare comandă", use_container_width=True, type="primary", disabled=is_cart_empty):
                             nr_c_edit = st.session_state.edit_order_id
                             
                             df_comenzi['Nr Comanda Numeric'] = pd.to_numeric(df_comenzi['Nr Comanda'], errors='coerce')
@@ -734,19 +732,7 @@ if mod == "📝 Plasează Comandă":
                 
                 if cs1.button(f"🔤 Nume Produs"): cycle_sort('Nume Produs'); st.rerun()
                 if cs2.button(f"% TVA"): cycle_sort('TVA'); st.rerun()
-                cs3.markdown("<div style='text-align:center;font-weight:bold;padding-top:15px;'>Cant.</div>", unsafe_allow_html=True)
-                
-                if st_col and st_dir:
-                    if st_col == 'Nume Produs': 
-                        df_a = df_a.sort_values(by=['priority', 'Nume Produs'], ascending=[True, (st_dir=='asc')])
-                    else:
-                        df_a = df_a.sort_values(by=['priority', 'TVA_num', 'Nume Produs'], ascending=[True, (st_dir=='asc'), True])
-                else:
-                    df_a = df_a.sort_values(by=['priority', 'TVA_num', 'Nume Produs'], ascending=[True, True, True])
-
-                df_a = df_a.drop(columns=['TVA_num', 'priority'])
-
-                for _, r in df_a.iterrows():
+                cs3.markdown("<div style='text-align:for _, r in df_a.iterrows():
                     r1, r2, r3 = st.columns([3, 1, 1.5])
                     p_nume = r['Nume Produs']
                     r1.markdown(f"<div class='big-font'>{p_nume}</div>", unsafe_allow_html=True)
@@ -827,7 +813,7 @@ if mod == "📝 Plasează Comandă":
                                 st.session_state.edit_order_date = str(r['Data']).split(' ')[0]
                                 st.session_state.cos_cumparaturi.clear()
                                 st.session_state.cart_reset_counter += 1
-                                st.success("✅ Mod de editare activat! Mergi la tab-ul '📝 Comandă Nouă' pentru modificarea comenzilor.")
+                                st.success("✅ Mod de editare activat! Mergi la secțiunea '📝 Plasează Comandă' din meniul stânga.")
                                 time.sleep(1.5)
                                 st.rerun()
                             else:
@@ -907,7 +893,7 @@ elif mod == "💼 Birou":
                                 st.session_state.user_logat = r['Magazin']
                                 st.session_state.cos_cumparaturi.clear()
                                 st.session_state.cart_reset_counter += 1
-                                st.success("✅ Mod de editare activat! Navighează manual la secțiunea '📝 Plasează Comandă' din meniul stânga.")
+                                st.success("✅ Mod de editare activat! Mergi la secțiunea '📝 Plasează Comandă' din meniul stânga.")
                             else:
                                 st.error("Parolă incorectă!")
 
@@ -925,7 +911,8 @@ elif mod == "🔒 Panou Admin":
         else:
             start_zi = acum_ro.replace(hour=4, minute=0, second=0, microsecond=0)
         
-        st.sidebar.caption(f"*(Resetat la: {start_zi.strftime('%d.%m.%Y %H:%M')})*")
+        # Formatare simplificată a datei
+        st.sidebar.caption(f"*(Data: {start_zi.strftime('%d.%m.%Y')})*")
         
         magazine_comandat = set()
         if not df_comenzi.empty:
@@ -1112,7 +1099,7 @@ elif mod == "🔒 Panou Admin":
 
         with t_stoc:
             st.subheader("📊 Gestionare Stoc Produse")
-            st.info("Bifează produsele care NU SUNT ÎN STOC (Stoc 0). Acestea vor dispărea de pe panoul de comandă al magazinelor, fără a fi șterse din sistem.")
+            st.info("Bifează produsele care NU SUNT ÎN STOC. Acestea vor dispărea de pe panoul de comandă al magazinelor.")
 
             cautare_stoc = st.text_input("🔍 Caută produs pentru stoc...", key="search_stoc")
 
@@ -1217,7 +1204,7 @@ elif mod == "🔒 Panou Admin":
                                     st.session_state.user_logat = r['Magazin']
                                     st.session_state.cos_cumparaturi.clear()
                                     st.session_state.cart_reset_counter += 1
-                                    st.success("✅ Mod de editare activat! Navighează manual la secțiunea '📝 Plasează Comandă' din meniul stânga.")
+                                    st.success("✅ Mod de editare activat! Mergi la secțiunea '📝 Plasează Comandă' din meniul stânga.")
                                 else:
                                     st.error("Parolă incorectă!")
 
