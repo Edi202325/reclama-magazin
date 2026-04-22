@@ -732,7 +732,8 @@ if mod == "📝 Plasează Comandă":
                 
                 if cs1.button(f"🔤 Nume Produs"): cycle_sort('Nume Produs'); st.rerun()
                 if cs2.button(f"% TVA"): cycle_sort('TVA'); st.rerun()
-                cs3.markdown("<div style='text-align:for _, r in df_a.iterrows():
+                cs3.markdown("<div style='text-align:
+                for _, r in df_a.iterrows():
                     r1, r2, r3 = st.columns([3, 1, 1.5])
                     p_nume = r['Nume Produs']
                     r1.markdown(f"<div class='big-font'>{p_nume}</div>", unsafe_allow_html=True)
