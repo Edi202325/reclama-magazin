@@ -732,7 +732,18 @@ if mod == "📝 Plasează Comandă":
                 
                 if cs1.button(f"🔤 Nume Produs"): cycle_sort('Nume Produs'); st.rerun()
                 if cs2.button(f"% TVA"): cycle_sort('TVA'); st.rerun()
-                cs3.markdown("<div style='text-align:
+                cs3.markdown("<div style='text-align:center;font-weight:bold;padding-top:15px;'>Cant.</div>", unsafe_allow_html=True)
+                
+                if st_col and st_dir:
+                    if st_col == 'Nume Produs': 
+                        df_a = df_a.sort_values(by=['priority', 'Nume Produs'], ascending=[True, (st_dir=='asc')])
+                    else:
+                        df_a = df_a.sort_values(by=['priority', 'TVA_num', 'Nume Produs'], ascending=[True, (st_dir=='asc'), True])
+                else:
+                    df_a = df_a.sort_values(by=['priority', 'TVA_num', 'Nume Produs'], ascending=[True, True, True])
+
+                df_a = df_a.drop(columns=['TVA_num', 'priority'])
+
                 for _, r in df_a.iterrows():
                     r1, r2, r3 = st.columns([3, 1, 1.5])
                     p_nume = r['Nume Produs']
