@@ -914,6 +914,45 @@ elif mod == "💼 Birou":
 # --- SECȚIUNEA ADMIN ---
 elif mod == "🔒 Panou Admin":
     if st.sidebar.text_input("Parola", type="password") == PAROLA_ADMIN:
+        
+        # --- ÎNCEPUT COD NOU: CALENDAR COMENZI AZI ---
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### 📅 Situație Comenzi")
+        
+        acum_ro = datetime.utcnow() + timedelta(hours=3)
+        if acum_ro.hour < 4:
+            start_zi = (acum_ro - timedelta(days=1)).replace(hour=4, minute=0, second=0, microsecond=0)
+        else:
+            start_zi = acum_ro.replace(hour=4, minute=0, second=0, microsecond=0)
+        
+        st.sidebar.caption(f"*(Resetat la: {start_zi.strftime('%d.%m.%Y %H:%M')})*")
+        
+        magazine_comandat = set()
+        if not df_comenzi.empty:
+            for _, r in df_comenzi.iterrows():
+                mag = str(r.get('Magazin', ''))
+                d_str = str(r.get('Data', ''))
+                if mag != 'SYSTEM' and d_str != 'CONFIG':
+                    try:
+                        d_comanda = datetime.strptime(d_str.strip(), "%d.%m.%Y %H:%M")
+                        if d_comanda >= start_zi:
+                            magazine_comandat.add(mag)
+                    except ValueError:
+                        pass
+        
+        toate_magazinele = list(CREDENTIALE_MAGAZINE.keys())
+        magazine_necomandat = [m for m in toate_magazinele if m not in magazine_comandat]
+        
+        if magazine_comandat:
+            st.sidebar.success("**✅ Au trimis comanda:**\n\n" + "\n".join([f"- {m}" for m in magazine_comandat]))
+        else:
+            st.sidebar.info("Niciun magazin nu a comandat încă azi.")
+            
+        if magazine_necomandat:
+            with st.sidebar.expander("⏳ Așteaptă comandă de la:"):
+                st.write("\n".join([f"- {m}" for m in magazine_necomandat]))
+        # --- SFÂRȘIT COD NOU ---
+
         st.subheader("🛠️ Administrare")
         
         t1, t_stoc, t2 = st.tabs(["📦 Produse", "📊 Stoc", "📄 Comenzi"])
@@ -972,6 +1011,86 @@ elif mod == "🔒 Panou Admin":
             
             df_disp_prod.index = range(1, len(df_disp_prod) + 1)
             st.dataframe(df_disp_prod, use_container_width=True)
+            
+            # --- ÎNCEPUT SECȚIUNE NOUĂ: EDITARE PRODUS ---
+            st.divider()
+            st.subheader("✏️ Editare Produs Individual")
+            p_edit = st.selectbox("Alege produsul pentru editare:", options=df_produse['Nume Produs'].tolist(), index=None, placeholder="Scrie sau alege produsul pe care vrei să-l modifici...")
+
+            if p_edit:
+                prod_idx = df_produse.index[df_produse['Nume Produs'] == p_edit].tolist()[0]
+                prod_curent = df_produse.loc[prod_idx]
+
+                with st.form("form_editare_produs_existent"):
+                    st.write(f"Modifici datele pentru: **{p_edit}**")
+                    c_ed2, c_ed3 = st.columns([3, 1])
+
+                    new_nume = c_ed2.text_input("Nume Produs", value=str(prod_curent.get('Nume Produs', '')))
+
+                    tva_curent = str(prod_curent.get('TVA', '11%'))
+                    tva_index = 0 if "11" in tva_curent else 1
+                    new_tva = c_ed3.selectbox("TVA", ["11%", "21%"], index=tva_index)
+
+                    c_ed4, c_ed5, c_ed6 = st.columns(3)
+
+                    um_curent = str(prod_curent.get('UM', 'BUC')).upper()
+                    opts_um = ["", "BUC", "PET", "KG", "BAX"]
+                    um_index = opts_um.index(um_curent) if um_curent in opts_um else 0
+                    new_um = c_ed4.selectbox("UM (Unitate Măsură)", opts_um, index=um_index)
+
+                    try: val_ach = float(str(prod_curent.get('Pret Unitar', 0)).replace(',', '.'))
+                    except: val_ach = 0.0
+                    new_pu = c_ed5.number_input("Achiziție", 0.00, step=0.01, format="%.2f", value=val_ach)
+
+                    try: val_van = float(str(prod_curent.get('Pret Vanzare', 0)).replace(',', '.'))
+                    except: val_van = 0.0
+                    new_pv = c_ed6.number_input("Vânzare", 0.00, step=0.01, format="%.2f", value=val_van)
+
+                    if st.form_submit_button("💾 Salvează Modificările"):
+                        if new_nume.strip() == "":
+                            st.warning("Numele produsului nu poate fi gol!")
+                        elif new_nume != p_edit and new_nume in df_produse['Nume Produs'].values:
+                            st.error("Există deja un alt produs salvat cu acest nume! Alege alt nume.")
+                        else:
+                            # 1. Actualizăm tabelul de PRODUSE
+                            df_produse.at[prod_idx, 'Nume Produs'] = new_nume
+                            df_produse.at[prod_idx, 'TVA'] = new_tva
+                            df_produse.at[prod_idx, 'UM'] = new_um
+                            df_produse.at[prod_idx, 'Pret Unitar'] = new_pu
+                            df_produse.at[prod_idx, 'Pret Vanzare'] = new_pv
+
+                            # 2. Actualizăm Istoricul de Comenzi
+                            if new_nume != p_edit:
+                                def schimba_nume_in_comanda(text_detalii):
+                                    if pd.isna(text_detalii): return text_detalii
+                                    elemente = str(text_detalii).split(", ")
+                                    elemente_noi = []
+                                    for item in elemente:
+                                        if ":" in item:
+                                            nume_p, cantitate = item.split(":", 1)
+                                            if nume_p.strip() == p_edit:
+                                                elemente_noi.append(f"{new_nume}:{cantitate}")
+                                            else:
+                                                elemente_noi.append(item)
+                                        else:
+                                            elemente_noi.append(item)
+                                    return ", ".join(elemente_noi)
+
+                                df_comenzi['Detalii Comanda'] = df_comenzi['Detalii Comanda'].apply(schimba_nume_in_comanda)
+                                save_data(df_comenzi, TAB_COMENZI)
+                                
+                                try:
+                                    df_draft = get_data(TAB_DRAFT, ['Magazin', 'Produs', 'Cantitate'])
+                                    if not df_draft.empty and 'Produs' in df_draft.columns:
+                                        df_draft.loc[df_draft['Produs'] == p_edit, 'Produs'] = new_nume
+                                        save_data(df_draft, TAB_DRAFT)
+                                except: pass
+
+                            if save_data(df_produse, TAB_PRODUSE):
+                                st.success(f"✅ Produsul '{new_nume}' a fost actualizat cu succes!")
+                                time.sleep(1.5)
+                                st.rerun()
+            # --- SFÂRȘIT SECȚIUNE NOUĂ ---
             
             st.divider(); st.subheader("🗑️ Ștergere Produs Individual")
             p_del = st.selectbox("Alege produsul:", options=df_produse['Nume Produs'].tolist(), index=None, placeholder="Scrie sau alege un produs pentru ștergere...")
