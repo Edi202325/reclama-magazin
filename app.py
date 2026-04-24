@@ -532,7 +532,7 @@ df_produse, a_mod = migrare_automata_tva(df_produse)
 if a_mod:
     if save_data(df_produse, TAB_PRODUSE): st.rerun()
 
-st.title("🛒 Platformă Gestiune Comenzi")
+st.title("🛒 Platformă Comenzi")
 st.markdown("---")
 
 with st.sidebar:
