@@ -140,7 +140,7 @@ FIRMA_NUME = "COMPANIA DEMO SRL"
 FIRMA_CIF = "RO12345678"
 FIRMA_RC = "J00/000/2024"
 FIRMA_ADRESA = "Oras, str. Exemplu nr. 10"
-FIRMA_CAPITAL = "200 RON"
+FIRMA_CAPITAL = "1000000 RON"
 FIRMA_CONTACT = "Tel.0700000000  Email: contact@companiademo.ro"
 FIRMA_BANCA = "BANCA DEMO SA"
 FIRMA_IBAN = "RO00DEMO1234567890123456"
@@ -957,7 +957,7 @@ elif mod == "🔒 Panou Admin":
         t1, t_stoc, t2 = st.tabs(["📦 Produse", "📊 Stoc", "📄 Comenzi"])
         
         with t1:
-            with st.expander("📤 Import listă (Excel/salvat .csv)"):
+            with st.expander("📤 Import listă (Excel/salvat.xlsx)"):
                 st.info("💡 **Format Coloane Excel: Nume Produs, TVA, UM, Pret Unitar, Pret Vanzare.**")
                 up = st.file_uploader("", type=['csv', 'xlsx', 'xls']) 
                 
@@ -974,7 +974,7 @@ elif mod == "🔒 Panou Admin":
                             df_produse = df_produse[[c for c in COLOANE_PRODUSE if c in df_produse.columns]]
                             
                             if save_data(df_produse, TAB_PRODUSE):
-                                st.success("✅ Produsele au fost salvate pe bune în Google Sheets!")
+                                st.success("✅ Produsele au fost salvate în Google Sheets!")
                                 st.rerun()
                         except Exception as e: st.error(f"Eroare la procesarea fișierului: {e}")
             
