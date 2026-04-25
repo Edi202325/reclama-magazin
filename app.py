@@ -106,8 +106,8 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- CONSTANTE & CREDENȚIALE ---
-NUME_GOOGLE_SHEET = 'Platforma_Comenzi_Demo_DB'
+# --- CONSTANTE & CREDENȚIALE (PRELUATE DIN ST.SECRETS) ---
+NUME_GOOGLE_SHEET = st.secrets["NUME_GOOGLE_SHEET"]
 
 TAB_PRODUSE = 'Produse'
 TAB_COMENZI = 'Comenzi'
@@ -117,33 +117,20 @@ TAB_DRAFT = 'Cos_Salvat'
 
 COLOANE_PRODUSE = ['Nume Produs', 'TVA', 'UM', 'Pret Unitar', 'Pret Vanzare', 'In Stoc']
 
-PAROLA_ADMIN = "admin123" 
-PAROLA_BIROU = "birou123"
+PAROLA_ADMIN = st.secrets["PAROLA_ADMIN"]
+PAROLA_BIROU = st.secrets["PAROLA_BIROU"]
 
-CREDENTIALE_MAGAZINE = {
-    "Magazin 1": "mag1", 
-    "Magazin 2": "mag2", 
-    "Magazin 3": "mag3", 
-    "Magazin 4": "mag4",
-    "Magazin 5": "mag5"
-}
+CREDENTIALE_MAGAZINE = st.secrets["CREDENTIALE_MAGAZINE"]
+CIF_MAGAZINE = st.secrets["CIF_MAGAZINE"]
 
-CIF_MAGAZINE = {
-    "Magazin Centru": "RO000001", 
-    "Magazin Nord": "RO000002",  
-    "Magazin Sud": "RO000003", 
-    "Magazin Est": "RO000004",
-    "Magazin Vest": "RO000005"
-}
-
-FIRMA_NUME = "COMPANIA DEMO SRL"
-FIRMA_CIF = "RO12345678"
-FIRMA_RC = "J00/000/2024"
-FIRMA_ADRESA = "Oras, str. Exemplu nr. 10"
-FIRMA_CAPITAL = "1000000 RON"
-FIRMA_CONTACT = "Tel.0700000000  Email: contact@companiademo.ro"
-FIRMA_BANCA = "BANCA DEMO SA"
-FIRMA_IBAN = "RO00DEMO1234567890123456"
+FIRMA_NUME = st.secrets["FIRMA"]["NUME"]
+FIRMA_CIF = st.secrets["FIRMA"]["CIF"]
+FIRMA_RC = st.secrets["FIRMA"]["RC"]
+FIRMA_ADRESA = st.secrets["FIRMA"]["ADRESA"]
+FIRMA_CAPITAL = st.secrets["FIRMA"]["CAPITAL"]
+FIRMA_CONTACT = st.secrets["FIRMA"]["CONTACT"]
+FIRMA_BANCA = st.secrets["FIRMA"]["BANCA"]
+FIRMA_IBAN = st.secrets["FIRMA"]["IBAN"]
 
 # --- STATE ---
 if 'sort_state' not in st.session_state: st.session_state.sort_state = {'col': None, 'dir': None}
@@ -345,7 +332,6 @@ def migrare_automata_tva(df):
     df = df[[c for c in COLOANE_PRODUSE if c in df.columns]]
     return df, modificat
 
-# 💡 LOGICA REPARATĂ: Sortarea sigură a priorităților
 def get_sort_priority(nume_produs):
     nume_low = str(nume_produs).lower().replace(" ", "")
     if 'sifon' in nume_low:
@@ -354,7 +340,6 @@ def get_sort_priority(nume_produs):
         return 2
     elif 'sgr' in nume_low:
         return 3
-    # Regex strict: "5l" nu trebuie sa aiba niciun numar, punct sau virgula in fata lui!
     elif re.search(r'(?<![,\.0-9])5l', nume_low):
         return 4
     else:
@@ -400,7 +385,6 @@ def cycle_sort(col_name):
 def get_pdf_volume_priority(nume_produs):
     nume_low = str(nume_produs).lower().replace(" ", "")
     if '2,5l' in nume_low or '2.5l' in nume_low: return 1
-    # Regex strict pt volume ca "2l" sa nu dea match pe "1.2l"
     if re.search(r'(?<![,\.0-9])2l', nume_low): return 2
     if '1,5l' in nume_low or '1.5l' in nume_low: return 3
     if re.search(r'(?<![,\.0-9])1l', nume_low): return 4
@@ -475,12 +459,10 @@ def genereaza_pdf_aviz(data_comenzii, magazin, produse_lista, id_comanda, df_inv
         else:
             produse_21.append(prod_info)
             
-    # Ordinea DOAR pentru PDF, exact cum ai cerut
     def sort_key_prioritati(x):
         nume = x['nume_original']
         prio_main = get_sort_priority(nume)
         
-        # Volumul contează doar dacă este SGR (prio_main == 3)
         if prio_main == 3:
             prio_vol = get_pdf_volume_priority(nume)
         else:
